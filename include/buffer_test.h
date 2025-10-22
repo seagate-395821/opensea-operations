@@ -27,6 +27,9 @@ extern "C"
 #define ALL_5_TEST_COUNT      10
 #define ALL_A_TEST_COUNT      10
 #define ZERO_F_5_A_TEST_COUNT 10
+#define ROW_BOAT_TEST_COUNT 10
+#define CHECKER_BOARD_TEST_COUNT 10
+#define MARK_TEST_COUNT 10
 #define WALKING_1_TEST_COUNT  5
 #define WALKING_0_TEST_COUNT  5
 #define RANDOM_TEST_COUNT     10
@@ -49,6 +52,13 @@ extern "C"
         patternTestResults fivesTest[ALL_5_TEST_COUNT];        // all 5's tested
         patternTestResults aTest[ALL_A_TEST_COUNT];            // all A's tested
         patternTestResults zeroF5ATest[ZERO_F_5_A_TEST_COUNT]; // pattern of 00FF55AA tested
+        patternTestResults rowBoat1[ROW_BOAT_TEST_COUNT];
+        patternTestResults rowBoat2[ROW_BOAT_TEST_COUNT];
+        patternTestResults rowBoat3[ROW_BOAT_TEST_COUNT];
+        patternTestResults rowBoat4[ROW_BOAT_TEST_COUNT];
+        patternTestResults checkerBoardByte[CHECKER_BOARD_TEST_COUNT];
+        patternTestResults checkerBoardWord[CHECKER_BOARD_TEST_COUNT];
+        patternTestResults mark[MARK_TEST_COUNT];
         patternTestResults walking1sTest[WALKING_1_TEST_COUNT];
         patternTestResults walking0sTest[WALKING_0_TEST_COUNT];
         patternTestResults randomTest[RANDOM_TEST_COUNT];
