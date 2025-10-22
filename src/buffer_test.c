@@ -244,6 +244,71 @@ static bool was_There_A_CRC_Error_On_Last_Command(const tDevice* device)
     return crc;
 }
 
+M_NODISCARD_REASON("This function tells whether the test should continue or not. You must use this result to determine when to continue testing or exit.")
+static M_INLINE bool set_cmd_results(eReturnValues result, ptrPatternTestResults testResults, const tDevice *device)
+{
+    bool continueTest = true;
+    switch (result)
+    {
+    case OS_PASSTHROUGH_FAILURE:
+    case NOT_SUPPORTED:
+        continueTest = false;
+        break;
+    case OS_COMMAND_TIMEOUT:
+        ++(testResults->totalCommandTimeouts);
+        break;
+    case SUCCESS:
+        break;
+    case ABORTED:
+    case COMMAND_FAILURE:
+    case FAILURE:
+    default:
+        if (was_There_A_CRC_Error_On_Last_Command(device))
+        {
+            ++(testResults->totalCommandCRCErrors);
+        }
+        break;
+    }
+    return continueTest;
+}
+
+M_NODISCARD static M_INLINE bool write_read_compare_pattern(const tDevice* device,
+                                                        uint8_t*       patternBuffer,
+                                                        uint32_t       deviceBufferSize,
+                                                        ptrPatternTestResults testResults)
+{
+    bool success = true;
+    eReturnValues wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
+    ++(testResults->totalCommandsSent);
+    if (!set_cmd_results(wbResult, testResults, device))
+    {
+        return false;
+    }
+    // now read back the pattern
+    uint8_t*       returnBuffer = safe_calloc_aligned(deviceBufferSize, sizeof(uint8_t), device->os_info.minimumAlignment);
+    if (returnBuffer == M_NULLPTR)
+    {
+        return false;
+    }
+    eReturnValues rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
+    ++(testResults->totalCommandsSent);
+    if (!set_cmd_results(rbResult, testResults, device))
+    {
+        success = false;
+    }
+    else
+    {
+        ++(testResults->totalBufferComparisons);
+        // first check if the pattern matches or not
+        if (memcmp(patternBuffer, returnBuffer, deviceBufferSize) != 0)
+        {
+            ++(testResults->totalBufferMiscompares);
+        }
+    }
+    safe_free_aligned(&returnBuffer);
+    return success;
+}
+
 // Function for simple byte pattern tests. take counter for number of times to try it?
 static void perform_Byte_Pattern_Test(const tDevice*        device,
                                       uint32_t              pattern,
@@ -254,10 +319,7 @@ static void perform_Byte_Pattern_Test(const tDevice*        device,
     uint8_t* patternBuffer =
         C_CAST(uint8_t*,
                safe_malloc_aligned(deviceBufferSize, device->os_info.minimumAlignment)); // only send this to the drive
-    uint8_t* returnBuffer = M_REINTERPRET_CAST(
-        uint8_t*, safe_malloc_aligned(deviceBufferSize,
-                                      device->os_info.minimumAlignment)); // only receive this from the drive
-    if (patternBuffer && returnBuffer)
+    if (patternBuffer)
     {
         fill_Pattern_Buffer_Into_Another_Buffer(C_CAST(uint8_t*, &pattern), sizeof(uint32_t), patternBuffer,
                                                 deviceBufferSize); // sets the pattern to write into memory
@@ -265,76 +327,15 @@ static void perform_Byte_Pattern_Test(const tDevice*        device,
         start_Timer(&patternTimer);
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
-            bool breakFromLoop =
-                false; // this will be set to true when we need to exit the loop for one reason or another
-            eReturnValues wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (wbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
             {
                 break;
-            }
-            // now read back the pattern
-            safe_memset(returnBuffer, deviceBufferSize, 0, deviceBufferSize);
-            eReturnValues rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (rbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
-            {
-                break;
-            }
-            ++(testResults->totalBufferComparisons);
-            // first check if the pattern matches or not
-            if (memcmp(patternBuffer, returnBuffer, deviceBufferSize) != 0)
-            {
-                ++(testResults->totalBufferMiscompares);
             }
         }
         stop_Timer(&patternTimer);
         testResults->totalTimeNS = get_Nano_Seconds(patternTimer);
     }
     safe_free_aligned(&patternBuffer);
-    safe_free_aligned(&returnBuffer);
 }
 
 typedef enum eRowBoatPatternEnum
@@ -358,66 +359,15 @@ rowBoatPatternSequence seq2 = {ROW_BOAT_PATTERN_55, ROW_BOAT_PATTERN_00, ROW_BOA
 rowBoatPatternSequence seq3 = {ROW_BOAT_PATTERN_FF, ROW_BOAT_PATTERN_55, ROW_BOAT_PATTERN_FF, ROW_BOAT_PATTERN_AA};
 rowBoatPatternSequence seq4 = {ROW_BOAT_PATTERN_00, ROW_BOAT_PATTERN_55, ROW_BOAT_PATTERN_00, ROW_BOAT_PATTERN_AA};
 
-static void rowboat_wrc(tDevice *device, uint32_t pattern, uint8_t *patternBuffer, uint8_t *returnBuffer, uint32_t deviceBufferSize, ptrPatternTestResults    testResults)
+M_NODISCARD static bool rowboat_wrc(const tDevice *device, uint32_t pattern, uint8_t *patternBuffer, uint32_t deviceBufferSize, ptrPatternTestResults    testResults)
 {
     fill_Pattern_Buffer_Into_Another_Buffer(C_CAST(uint8_t*, &pattern), sizeof(uint32_t), patternBuffer,
                                         deviceBufferSize); // sets the pattern to write into memory
-    eReturnValues wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
-    ++(testResults->totalCommandsSent);
-    switch (wbResult)
+    if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
     {
-    case OS_PASSTHROUGH_FAILURE:
-    case NOT_SUPPORTED:
-        return;
-        break;
-    case OS_COMMAND_TIMEOUT:
-        ++(testResults->totalCommandTimeouts);
-        break;
-    case SUCCESS:
-        break;
-    case ABORTED:
-    case COMMAND_FAILURE:
-    case FAILURE:
-    default:
-        if (was_There_A_CRC_Error_On_Last_Command(device))
-        {
-            ++(testResults->totalCommandCRCErrors);
-        }
-        return;
+        return false;
     }
-    
-    // now read back the pattern
-    safe_memset(returnBuffer, deviceBufferSize, 0, deviceBufferSize);
-    eReturnValues rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
-    ++(testResults->totalCommandsSent);
-    switch (rbResult)
-    {
-    case OS_PASSTHROUGH_FAILURE:
-    case NOT_SUPPORTED:
-        return;
-        break;
-    case OS_COMMAND_TIMEOUT:
-        ++(testResults->totalCommandTimeouts);
-        break;
-    case SUCCESS:
-        break;
-    case ABORTED:
-    case COMMAND_FAILURE:
-    case FAILURE:
-    default:
-        if (was_There_A_CRC_Error_On_Last_Command(device))
-        {
-            ++(testResults->totalCommandCRCErrors);
-        }
-        return;
-    }
-    ++(testResults->totalBufferComparisons);
-    // first check if the pattern matches or not
-    if (memcmp(patternBuffer, returnBuffer, deviceBufferSize) != 0)
-    {
-        ++(testResults->totalBufferMiscompares);
-    }
-    return;
+    return true;
 }
 
 static uint32_t set_Rowboat_Pattern_From_Enum(eRowBoatPattern pat)
@@ -441,7 +391,7 @@ static uint32_t set_Rowboat_Pattern_From_Enum(eRowBoatPattern pat)
     return retpat;
 }
 
-static void perform_RowBoat_Pattern_Test(tDevice*                 device,
+static void perform_RowBoat_Pattern_Test(const tDevice*                 device,
                                          rowBoatPatternSequence   patternSequence,
                                          uint32_t                 deviceBufferSize,
                                          ptrPatternTestResults    testResults)
@@ -450,25 +400,33 @@ static void perform_RowBoat_Pattern_Test(tDevice*                 device,
     uint8_t* patternBuffer =
         C_CAST(uint8_t*,
                safe_malloc_aligned(deviceBufferSize, device->os_info.minimumAlignment)); // only send this to the drive
-    uint8_t* returnBuffer = M_REINTERPRET_CAST(
-        uint8_t*, safe_malloc_aligned(deviceBufferSize,
-                                      device->os_info.minimumAlignment)); // only receive this from the drive
-    if (patternBuffer && returnBuffer)
+    if (patternBuffer)
     {
         DECLARE_SEATIMER(patternTimer);
         start_Timer(&patternTimer);
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
-            rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat1), patternBuffer, returnBuffer, deviceBufferSize, testResults);
-            rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat2), patternBuffer, returnBuffer, deviceBufferSize, testResults);
-            rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat3), patternBuffer, returnBuffer, deviceBufferSize, testResults);
-            rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat4), patternBuffer, returnBuffer, deviceBufferSize, testResults);
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat1), patternBuffer, deviceBufferSize, testResults))
+            {
+                break;
+            }
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat2), patternBuffer, deviceBufferSize, testResults))
+            {
+                break;
+            }
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat3), patternBuffer, deviceBufferSize, testResults))
+            {
+                break;
+            }
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat4), patternBuffer, deviceBufferSize, testResults))
+            {
+                break;
+            }
         }
         stop_Timer(&patternTimer);
         testResults->totalTimeNS = get_Nano_Seconds(patternTimer);
     }
     safe_free_aligned(&patternBuffer);
-    safe_free_aligned(&returnBuffer);
 }
 
 static void fill_mark_pattern_in_buffer(uint8_t *patternBuffer, uint32_t deviceBufferSize)
@@ -495,93 +453,54 @@ static void fill_mark_pattern_in_buffer(uint8_t *patternBuffer, uint32_t deviceB
     }
 }
 
-static void perform_Mark_Pattern_Test(tDevice* device, uint32_t deviceBufferSize, ptrPatternTestResults testResults)
+static void perform_Mark_Pattern_Test(const tDevice* device, uint32_t deviceBufferSize, ptrPatternTestResults testResults)
 {
     uint32_t numberOfTimesToTest = UINT32_C(10);
     uint8_t* patternBuffer =
         C_CAST(uint8_t*,
                safe_malloc_aligned(deviceBufferSize, device->os_info.minimumAlignment)); // only send this to the drive
-    uint8_t* returnBuffer = M_REINTERPRET_CAST(
-        uint8_t*, safe_malloc_aligned(deviceBufferSize,
-                                      device->os_info.minimumAlignment)); // only receive this from the drive
-    if (patternBuffer && returnBuffer)
+    if (patternBuffer)
     {
         DECLARE_SEATIMER(patternTimer);
         start_Timer(&patternTimer);
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
-            bool breakFromLoop = false;
             fill_mark_pattern_in_buffer(patternBuffer, deviceBufferSize);
-            eReturnValues wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (wbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
             {
                 break;
-            }
-            // now read back the pattern
-            safe_memset(returnBuffer, deviceBufferSize, 0, deviceBufferSize);
-            eReturnValues rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (rbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
-            {
-                break;
-            }
-            ++(testResults->totalBufferComparisons);
-            // first check if the pattern matches or not
-            if (memcmp(patternBuffer, returnBuffer, deviceBufferSize) != 0)
-            {
-                ++(testResults->totalBufferMiscompares);
             }
         }
         stop_Timer(&patternTimer);
         testResults->totalTimeNS = get_Nano_Seconds(patternTimer);
     }
     safe_free_aligned(&patternBuffer);
-    safe_free_aligned(&returnBuffer);
 }
 
+static bool fill_walking_test_pattern_in_buffer(uint8_t *patternBuffer, uint32_t deviceBufferSize, bool walkingZeros, uint32_t bitNumber, uint32_t *byteNumber)
+{
+    safe_memset(patternBuffer, deviceBufferSize, walkingZeros ? 0xFF : 0x00, deviceBufferSize);
+    if (bitNumber > UINT32_C(7))
+    {
+        // this means we've shifted the bit through each bit of this byte, so offset to the next byte and start
+        // again
+        ++(*byteNumber);
+        bitNumber = UINT32_C(0);
+        if (*byteNumber >= deviceBufferSize)
+        {
+            return false;
+        }
+    }
+    if (walkingZeros)
+    {
+        patternBuffer[*byteNumber] = clear_uint8_bit(patternBuffer[*byteNumber], bitNumber);
+    }
+    else
+    {
+        patternBuffer[*byteNumber] = set_uint8_bit(patternBuffer[*byteNumber], bitNumber);
+    }
+    return true;
+}
 
 // Function for Walking 1's/0's test
 static void perform_Walking_Test(const tDevice*        device,
@@ -592,112 +511,26 @@ static void perform_Walking_Test(const tDevice*        device,
     uint8_t* patternBuffer = M_REINTERPRET_CAST(
         uint8_t*, safe_calloc_aligned(deviceBufferSize, sizeof(uint8_t),
                                       device->os_info.minimumAlignment)); // only send this to the drive
-    uint8_t* returnBuffer = M_REINTERPRET_CAST(
-        uint8_t*, safe_malloc_aligned(deviceBufferSize,
-                                      device->os_info.minimumAlignment)); // only receive this from the drive
-    if (patternBuffer && returnBuffer)
+    if (patternBuffer)
     {
         DECLARE_SEATIMER(patternTimer);
         start_Timer(&patternTimer);
         for (uint32_t bitNumber = UINT32_C(0), byteNumber = UINT32_C(0); byteNumber < deviceBufferSize; ++bitNumber)
         {
-            bool breakFromLoop = false;
-            // set the pattern
-            if (walkingZeros)
+            if (!fill_walking_test_pattern_in_buffer(patternBuffer, deviceBufferSize, walkingZeros, bitNumber,
+                                                    &byteNumber))
             {
-                safe_memset(patternBuffer, deviceBufferSize, 0xFF, deviceBufferSize);
+                break; // finished all bits in the buffer
             }
-            else
-            {
-                safe_memset(patternBuffer, deviceBufferSize, 0, deviceBufferSize);
-            }
-            if (bitNumber > 7)
-            {
-                // this means we've shifted the bit through each bit of this byte, so offset to the next byte and start
-                // again
-                ++byteNumber;
-                bitNumber = 0;
-                if (byteNumber >= deviceBufferSize)
-                {
-                    break;
-                }
-            }
-            if (walkingZeros)
-            {
-                patternBuffer[byteNumber] ^= M_BitN(bitNumber); // exclusive or should turn this bit to a zero
-            }
-            else
-            {
-                patternBuffer[byteNumber] |= M_BitN(bitNumber);
-            }
-            eReturnValues wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (wbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
             {
                 break;
-            }
-            // now read back the pattern
-            safe_memset(returnBuffer, deviceBufferSize, 0, deviceBufferSize);
-            eReturnValues rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (rbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
-            {
-                break;
-            }
-            ++(testResults->totalBufferComparisons);
-            // first check if the pattern matches or not
-            if (memcmp(patternBuffer, returnBuffer, deviceBufferSize) != 0)
-            {
-                ++(testResults->totalBufferMiscompares);
             }
         }
         stop_Timer(&patternTimer);
         testResults->totalTimeNS = get_Nano_Seconds(patternTimer);
     }
     safe_free_aligned(&patternBuffer);
-    safe_free_aligned(&returnBuffer);
 }
 // Function for random data pattern test
 static void perform_Random_Pattern_Test(const tDevice*        device,
@@ -708,94 +541,23 @@ static void perform_Random_Pattern_Test(const tDevice*        device,
     uint8_t* patternBuffer =
         C_CAST(uint8_t*,
                safe_malloc_aligned(deviceBufferSize, device->os_info.minimumAlignment)); // only send this to the drive
-    uint8_t* returnBuffer = M_REINTERPRET_CAST(
-        uint8_t*, safe_malloc_aligned(deviceBufferSize,
-                                      device->os_info.minimumAlignment)); // only receive this from the drive
-    if (patternBuffer && returnBuffer)
+    if (patternBuffer)
     {
         DECLARE_SEATIMER(patternTimer);
         start_Timer(&patternTimer);
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
-            bool breakFromLoop = false;
             fill_Random_Pattern_In_Buffer(patternBuffer, deviceBufferSize); // set a new random pattern each time
-            eReturnValues wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (wbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
             {
                 break;
-            }
-            // now read back the pattern
-            safe_memset(returnBuffer, deviceBufferSize, 0, deviceBufferSize);
-            eReturnValues rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
-            ++(testResults->totalCommandsSent);
-            switch (rbResult)
-            {
-            case OS_PASSTHROUGH_FAILURE:
-            case NOT_SUPPORTED:
-                breakFromLoop = true;
-                break;
-            case OS_COMMAND_TIMEOUT:
-                ++(testResults->totalCommandTimeouts);
-                break;
-            case SUCCESS:
-                break;
-            case ABORTED:
-            case COMMAND_FAILURE:
-            case FAILURE:
-            default:
-                if (was_There_A_CRC_Error_On_Last_Command(device))
-                {
-                    ++(testResults->totalCommandCRCErrors);
-                }
-                continue; // continue loop since this will miscompare no matter what on the read buffer command
-            }
-            if (breakFromLoop)
-            {
-                break;
-            }
-            ++(testResults->totalBufferComparisons);
-            // first check if the pattern matches or not
-            if (memcmp(patternBuffer, returnBuffer, deviceBufferSize) != 0)
-            {
-                ++(testResults->totalBufferMiscompares);
             }
         }
         stop_Timer(&patternTimer);
         testResults->totalTimeNS = get_Nano_Seconds(patternTimer);
     }
     safe_free_aligned(&patternBuffer);
-    safe_free_aligned(&returnBuffer);
 }
-
-typedef enum eRowBoatPatternEnum
-{
-    ROW_BOAT_55 = 0x55,
-    ROW_BOAT_FF = 0xFF,
-    ROW_BOAT_AA = 0xAA,
-    ROW_BOAT_00 = 0x00
-} eRowBoatPattern;
 
 // row boat test: device, inverting pattern, static pattern, bool startStatic
 // start static to start with the static pattern or the alternating pattern
