@@ -26,6 +26,7 @@
 #include "type_conversion.h"
 
 #include "buffer_test.h"
+#include "cmds.h"
 
 static bool ata_Buffer_Commands_Supported(const tDevice* device)
 {
@@ -120,6 +121,16 @@ static eReturnValues get_Buffer_Size(const tDevice* device, uint32_t* bufferSize
         }
     }
     return ret;
+}
+
+static uint32_t get_LBAs_Per_BufferSize(const tDevice* device, uint32_t bufferSize)
+{
+    uint32_t lbasPerBufferSize = UINT32_C(1);
+    if (device->drive_info.deviceBlockSize > 0)
+    {
+        lbasPerBufferSize = bufferSize / device->drive_info.deviceBlockSize;
+    }
+    return lbasPerBufferSize;
 }
 
 static eReturnValues send_Read_Buffer_Command(const tDevice* device, uint8_t* ptrData, uint32_t dataSize)
@@ -275,10 +286,21 @@ static M_INLINE bool set_cmd_results(eReturnValues result, ptrPatternTestResults
 M_NODISCARD static M_INLINE bool write_read_compare_pattern(const tDevice* device,
                                                         uint8_t*       patternBuffer,
                                                         uint32_t       deviceBufferSize,
-                                                        ptrPatternTestResults testResults)
+                                                        ptrPatternTestResults testResults,
+                                                        eCableTestMode testMode)
 {
     bool success = true;
-    eReturnValues wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
+    eReturnValues wbResult = SUCCESS;
+    uint64_t lba = 0;
+    switch(testMode)
+    {
+    case CABLE_TEST_MODE_BUFFER_CMDS:
+        wbResult = send_Write_Buffer_Command(device, patternBuffer, deviceBufferSize);
+        break;
+    case CABLE_TEST_MODE_READ_WRITE_CMDS:
+        wbResult = write_LBA(device, lba, false, patternBuffer, deviceBufferSize);
+        break;
+    }
     ++(testResults->totalCommandsSent);
     if (!set_cmd_results(wbResult, testResults, device))
     {
@@ -290,7 +312,16 @@ M_NODISCARD static M_INLINE bool write_read_compare_pattern(const tDevice* devic
     {
         return false;
     }
-    eReturnValues rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
+    eReturnValues rbResult = SUCCESS;
+    switch(testMode)
+    {
+    case CABLE_TEST_MODE_BUFFER_CMDS:
+        rbResult = send_Read_Buffer_Command(device, returnBuffer, deviceBufferSize);
+        break;
+    case CABLE_TEST_MODE_READ_WRITE_CMDS:
+        rbResult = read_LBA(device, lba, false, returnBuffer, deviceBufferSize);
+        break;
+    }
     ++(testResults->totalCommandsSent);
     if (!set_cmd_results(rbResult, testResults, device))
     {
@@ -313,7 +344,8 @@ M_NODISCARD static M_INLINE bool write_read_compare_pattern(const tDevice* devic
 static void perform_Byte_Pattern_Test(const tDevice*        device,
                                       uint32_t              pattern,
                                       uint32_t              deviceBufferSize,
-                                      ptrPatternTestResults testResults)
+                                      ptrPatternTestResults testResults,
+                                      eCableTestMode testMode)
 {
     uint32_t numberOfTimesToTest = UINT32_C(5);
     uint8_t* patternBuffer =
@@ -327,7 +359,7 @@ static void perform_Byte_Pattern_Test(const tDevice*        device,
         start_Timer(&patternTimer);
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
-            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
@@ -359,11 +391,11 @@ rowBoatPatternSequence seq2 = {ROW_BOAT_PATTERN_55, ROW_BOAT_PATTERN_00, ROW_BOA
 rowBoatPatternSequence seq3 = {ROW_BOAT_PATTERN_FF, ROW_BOAT_PATTERN_55, ROW_BOAT_PATTERN_FF, ROW_BOAT_PATTERN_AA};
 rowBoatPatternSequence seq4 = {ROW_BOAT_PATTERN_00, ROW_BOAT_PATTERN_55, ROW_BOAT_PATTERN_00, ROW_BOAT_PATTERN_AA};
 
-M_NODISCARD static bool rowboat_wrc(const tDevice *device, uint32_t pattern, uint8_t *patternBuffer, uint32_t deviceBufferSize, ptrPatternTestResults    testResults)
+M_NODISCARD static bool rowboat_wrc(const tDevice *device, uint32_t pattern, uint8_t *patternBuffer, uint32_t deviceBufferSize, ptrPatternTestResults    testResults, eCableTestMode testMode)
 {
     fill_Pattern_Buffer_Into_Another_Buffer(C_CAST(uint8_t*, &pattern), sizeof(uint32_t), patternBuffer,
                                         deviceBufferSize); // sets the pattern to write into memory
-    if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
+    if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults, testMode))
     {
         return false;
     }
@@ -394,7 +426,7 @@ static uint32_t set_Rowboat_Pattern_From_Enum(eRowBoatPattern pat)
 static void perform_RowBoat_Pattern_Test(const tDevice*                 device,
                                          rowBoatPatternSequence   patternSequence,
                                          uint32_t                 deviceBufferSize,
-                                         ptrPatternTestResults    testResults)
+                                         ptrPatternTestResults    testResults, eCableTestMode testMode)
 {
     uint32_t numberOfTimesToTest = UINT32_C(5);
     uint8_t* patternBuffer =
@@ -406,19 +438,19 @@ static void perform_RowBoat_Pattern_Test(const tDevice*                 device,
         start_Timer(&patternTimer);
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
-            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat1), patternBuffer, deviceBufferSize, testResults))
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat1), patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
-            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat2), patternBuffer, deviceBufferSize, testResults))
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat2), patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
-            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat3), patternBuffer, deviceBufferSize, testResults))
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat3), patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
-            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat4), patternBuffer, deviceBufferSize, testResults))
+            if (!rowboat_wrc(device, set_Rowboat_Pattern_From_Enum(patternSequence.pat4), patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
@@ -453,7 +485,7 @@ static void fill_mark_pattern_in_buffer(uint8_t *patternBuffer, uint32_t deviceB
     }
 }
 
-static void perform_Mark_Pattern_Test(const tDevice* device, uint32_t deviceBufferSize, ptrPatternTestResults testResults)
+static void perform_Mark_Pattern_Test(const tDevice* device, uint32_t deviceBufferSize, ptrPatternTestResults testResults, eCableTestMode testMode)
 {
     uint32_t numberOfTimesToTest = UINT32_C(10);
     uint8_t* patternBuffer =
@@ -466,7 +498,7 @@ static void perform_Mark_Pattern_Test(const tDevice* device, uint32_t deviceBuff
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
             fill_mark_pattern_in_buffer(patternBuffer, deviceBufferSize);
-            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
@@ -506,23 +538,33 @@ static bool fill_walking_test_pattern_in_buffer(uint8_t *patternBuffer, uint32_t
 static void perform_Walking_Test(const tDevice*        device,
                                  bool                  walkingZeros,
                                  uint32_t              deviceBufferSize,
-                                 ptrPatternTestResults testResults)
+                                 ptrPatternTestResults testResults,
+                                 eCableTestMode testMode)
 {
     uint8_t* patternBuffer = M_REINTERPRET_CAST(
         uint8_t*, safe_calloc_aligned(deviceBufferSize, sizeof(uint8_t),
                                       device->os_info.minimumAlignment)); // only send this to the drive
     if (patternBuffer)
     {
+        uint32_t lbasPerBuffer = get_LBAs_Per_BufferSize(device, deviceBufferSize);
         DECLARE_SEATIMER(patternTimer);
         start_Timer(&patternTimer);
-        for (uint32_t bitNumber = UINT32_C(0), byteNumber = UINT32_C(0); byteNumber < deviceBufferSize; ++bitNumber)
+        for (uint32_t bitNumber = UINT32_C(0), byteNumber = UINT32_C(0); byteNumber < (deviceBufferSize / lbasPerBuffer); ++bitNumber)
         {
             if (!fill_walking_test_pattern_in_buffer(patternBuffer, deviceBufferSize, walkingZeros, bitNumber,
                                                     &byteNumber))
             {
                 break; // finished all bits in the buffer
             }
-            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
+            for (uint32_t lbaCopyIter = UINT32_C(1); lbaCopyIter < lbasPerBuffer; ++lbaCopyIter)
+            {
+                safe_memcpy(&patternBuffer[device->drive_info.deviceBlockSize * (lbaCopyIter)],
+                                deviceBufferSize - (device->drive_info.deviceBlockSize * (lbaCopyIter)),
+                                &patternBuffer[0], M_Min(device->drive_info.deviceBlockSize,
+                                  deviceBufferSize - (device->drive_info.deviceBlockSize * (lbaCopyIter))));
+            }
+
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
@@ -535,7 +577,8 @@ static void perform_Walking_Test(const tDevice*        device,
 // Function for random data pattern test
 static void perform_Random_Pattern_Test(const tDevice*        device,
                                         uint32_t              deviceBufferSize,
-                                        ptrPatternTestResults testResults)
+                                        ptrPatternTestResults testResults,
+                                    eCableTestMode testMode)
 {
     uint32_t numberOfTimesToTest = UINT32_C(10);
     uint8_t* patternBuffer =
@@ -548,7 +591,7 @@ static void perform_Random_Pattern_Test(const tDevice*        device,
         for (uint32_t counter = UINT32_C(0); counter < numberOfTimesToTest; ++counter)
         {
             fill_Random_Pattern_In_Buffer(patternBuffer, deviceBufferSize); // set a new random pattern each time
-            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults))
+            if (!write_read_compare_pattern(device, patternBuffer, deviceBufferSize, testResults, testMode))
             {
                 break;
             }
@@ -558,17 +601,6 @@ static void perform_Random_Pattern_Test(const tDevice*        device,
     }
     safe_free_aligned(&patternBuffer);
 }
-
-// row boat test: device, inverting pattern, static pattern, bool startStatic
-// start static to start with the static pattern or the alternating pattern
-
-// row boat:
-// 55->FF->AA->FF
-// 55->00->AA->00
-// FF->55->FF->AA
-// 00->55->00->AA
-
-// mark pattern: 48 F's, 48 0's, so on and so forth
 
 // SATA Phy event counters: CRC = definitely bad
 //                          R_ERR = multiple possible causes from bad connection to bad cable. Recommend redoing the
@@ -580,8 +612,8 @@ static void perform_Random_Pattern_Test(const tDevice*        device,
 //                         cable. Recommend redoing the connection or replacing cable.
 // Slower interface speed = longer test time to get a confident result.
 
-// master function for the whole test.
-eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults testResults)
+// main function for the whole test.
+eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults testResults, eCableTestMode testMode)
 {
     eReturnValues ret = SUCCESS;
     DISABLE_NONNULL_COMPARE
@@ -594,7 +626,16 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
     {
         uint8_t  offsetPO2  = UINT8_C(0); // This shouldn't actually be needed...but I have it here in case I do
         uint32_t bufferSize = UINT32_C(0);
-        if (SUCCESS == get_Buffer_Size(device, &bufferSize, &offsetPO2) && bufferSize > 0)
+        switch (testMode)
+        {
+        case CABLE_TEST_MODE_BUFFER_CMDS:
+            get_Buffer_Size(device, &bufferSize, &offsetPO2);
+            break;
+        case CABLE_TEST_MODE_READ_WRITE_CMDS:
+            bufferSize = get_Sector_Count_For_Read_Write(device) * device->drive_info.deviceBlockSize;
+            break;
+        }
+        if (bufferSize > UINT32_C(0))
         {
             DECLARE_SEATIMER(totalTestingTime);
             // drive supports the read/write buffer commands we need and we know what size the buffer is we can test
@@ -607,7 +648,7 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             {
                 perform_Byte_Pattern_Test(
                     device, UINT32_C(0x00000000), bufferSize,
-                    &testResults->zerosTest[count]); // arbitrary number 10 was chosen since it sounded good for number
+                    &testResults->zerosTest[count], testMode); // arbitrary number 10 was chosen since it sounded good for number
                                                      // of times to try this pattern
             }
             puts("F's test");
@@ -615,7 +656,7 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             {
                 perform_Byte_Pattern_Test(
                     device, UINT32_C(0xFFFFFFFF), bufferSize,
-                    &testResults->fTest[count]); // arbitrary number 10 was chosen since it sounded good for number of
+                    &testResults->fTest[count], testMode); // arbitrary number 10 was chosen since it sounded good for number of
                                                  // times to try this pattern
             }
             puts("5's test");
@@ -623,7 +664,7 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             {
                 perform_Byte_Pattern_Test(
                     device, UINT32_C(0x55555555), bufferSize,
-                    &testResults->fivesTest[count]); // arbitrary number 10 was chosen since it sounded good for number
+                    &testResults->fivesTest[count], testMode); // arbitrary number 10 was chosen since it sounded good for number
                                                      // of times to try this pattern
             }
             puts("A's test");
@@ -631,7 +672,7 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             {
                 perform_Byte_Pattern_Test(
                     device, UINT32_C(0xAAAAAAAA), bufferSize,
-                    &testResults->aTest[count]); // arbitrary number 10 was chosen since it sounded good for number of
+                    &testResults->aTest[count], testMode); // arbitrary number 10 was chosen since it sounded good for number of
                                                  // times to try this pattern
             }
             // checker board - byte
@@ -640,7 +681,7 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             {
                 perform_Byte_Pattern_Test(
                     device, UINT32_C(0x55AA55AA), bufferSize,
-                    &testResults->checkerBoardByte[count]); // arbitrary number 10 was chosen since it sounded good for number of
+                    &testResults->checkerBoardByte[count], testMode); // arbitrary number 10 was chosen since it sounded good for number of
                                                  // times to try this pattern
             }
             // checker board - word
@@ -649,14 +690,14 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             {
                 perform_Byte_Pattern_Test(
                     device, UINT32_C(0x5555AAAA), bufferSize,
-                    &testResults->checkerBoardWord[count]); // arbitrary number 10 was chosen since it sounded good for number of
+                    &testResults->checkerBoardWord[count], testMode); // arbitrary number 10 was chosen since it sounded good for number of
                                                  // times to try this pattern
             }
             // mark
             puts("Mark test");
             for (uint8_t count = UINT8_C(0); count < MARK_TEST_COUNT; ++count)
             {
-                perform_Mark_Pattern_Test(device, bufferSize, &testResults->mark[count]);
+                perform_Mark_Pattern_Test(device, bufferSize, &testResults->mark[count], testMode);
             }
             
             // Row Boat
@@ -664,42 +705,43 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             for (uint8_t count = UINT8_C(0); count < ZERO_F_5_A_TEST_COUNT; ++count)
             {
                 rowBoatPatternSequence myRowBoat = {ROW_BOAT_PATTERN_00, ROW_BOAT_PATTERN_FF, ROW_BOAT_PATTERN_55, ROW_BOAT_PATTERN_AA};
-                perform_RowBoat_Pattern_Test(device, myRowBoat, bufferSize, &testResults->zeroF5ATest[count]);
+                perform_RowBoat_Pattern_Test(device, myRowBoat, bufferSize, &testResults->zeroF5ATest[count], testMode);
             }
             puts("Rowboat 1 test");
             for (uint8_t count = UINT8_C(0); count < ROW_BOAT_TEST_COUNT; ++count)
             {
-                perform_RowBoat_Pattern_Test(device, seq1, bufferSize, &testResults->rowBoat1[count]);
+                perform_RowBoat_Pattern_Test(device, seq1, bufferSize, &testResults->rowBoat1[count], testMode);
             }
             puts("Rowboat 2 test");
             for (uint8_t count = UINT8_C(0); count < ROW_BOAT_TEST_COUNT; ++count)
             {
-                perform_RowBoat_Pattern_Test(device, seq2, bufferSize, &testResults->rowBoat2[count]);
+                perform_RowBoat_Pattern_Test(device, seq2, bufferSize, &testResults->rowBoat2[count], testMode);
             }
             puts("Rowboat 3 test");
             for (uint8_t count = UINT8_C(0); count < ROW_BOAT_TEST_COUNT; ++count)
             {
-                perform_RowBoat_Pattern_Test(device, seq3, bufferSize, &testResults->rowBoat3[count]);
+                perform_RowBoat_Pattern_Test(device, seq3, bufferSize, &testResults->rowBoat3[count], testMode);
             }
             puts("Rowboat 4 test");
             for (uint8_t count = UINT8_C(0); count < ROW_BOAT_TEST_COUNT; ++count)
             {
-                perform_RowBoat_Pattern_Test(device, seq4, bufferSize, &testResults->rowBoat4[count]);
+                perform_RowBoat_Pattern_Test(device, seq4, bufferSize, &testResults->rowBoat4[count], testMode);
             }
             // now walking 1's
             puts("Walking 1's test");
             for (uint8_t count = UINT8_C(0); count < WALKING_1_TEST_COUNT; ++count)
             {
                 perform_Walking_Test(device, false, bufferSize,
-                                     &testResults->walking1sTest[count]); // arbitrary number 5 was chose since it
+                                     &testResults->walking1sTest[count], testMode); // arbitrary number 5 was chose since it
                                                                           // sounded good for trying this test
             }
+            // Walking tests need a logical sectors per buffer size otherwise this takes significantly longer than necessary.
             // walking 0's
             puts("Walking 0's test");
             for (uint8_t count = UINT8_C(0); count < WALKING_0_TEST_COUNT; ++count)
             {
                 perform_Walking_Test(device, true, bufferSize,
-                                     &testResults->walking0sTest[count]); // arbitrary number 5 was chose since it
+                                     &testResults->walking0sTest[count], testMode); // arbitrary number 5 was chose since it
                                                                           // sounded good for trying this test
             }
             // random data patterns
@@ -708,7 +750,7 @@ eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults test
             {
                 perform_Random_Pattern_Test(
                     device, bufferSize,
-                    &testResults->randomTest[count]); // arbitrary number 10 was chosen since it sounded good for number
+                    &testResults->randomTest[count], testMode); // arbitrary number 10 was chosen since it sounded good for number
                                                       // of times to try this pattern
             }
             stop_Timer(&totalTestingTime);

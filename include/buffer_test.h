@@ -64,6 +64,12 @@ extern "C"
         patternTestResults randomTest[RANDOM_TEST_COUNT];
     } cableTestResults, *ptrCableTestResults;
 
+    typedef enum eCableTestModeEnum
+    {
+        CABLE_TEST_MODE_BUFFER_CMDS,
+        CABLE_TEST_MODE_READ_WRITE_CMDS
+    }eCableTestMode;
+
     //-----------------------------------------------------------------------------
     //
     //  perform_Cable_Test(const tDevice *device, ptrCableTestResults testResults)
@@ -81,7 +87,7 @@ extern "C"
     //-----------------------------------------------------------------------------
     M_NONNULL_PARAM_LIST(1, 2)
     M_PARAM_RO(1)
-    M_PARAM_WO(2) eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults testResults);
+    M_PARAM_WO(2) eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults testResults, eCableTestMode testMode);
 
     //-----------------------------------------------------------------------------
     //
