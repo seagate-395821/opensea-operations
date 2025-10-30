@@ -22,17 +22,17 @@ extern "C"
 {
 #endif
 
-#define ALL_0_TEST_COUNT      10
-#define ALL_F_TEST_COUNT      10
-#define ALL_5_TEST_COUNT      10
-#define ALL_A_TEST_COUNT      10
-#define ZERO_F_5_A_TEST_COUNT 10
-#define ROW_BOAT_TEST_COUNT 10
+#define ALL_0_TEST_COUNT         10
+#define ALL_F_TEST_COUNT         10
+#define ALL_5_TEST_COUNT         10
+#define ALL_A_TEST_COUNT         10
+#define ZERO_F_5_A_TEST_COUNT    10
+#define ROW_BOAT_TEST_COUNT      10
 #define CHECKER_BOARD_TEST_COUNT 10
-#define MARK_TEST_COUNT 10
-#define WALKING_1_TEST_COUNT  5
-#define WALKING_0_TEST_COUNT  5
-#define RANDOM_TEST_COUNT     10
+#define MARK_TEST_COUNT          10
+#define WALKING_1_TEST_COUNT     5
+#define WALKING_0_TEST_COUNT     5
+#define RANDOM_TEST_COUNT        10
 
     typedef struct s_patternTestResults
     {
@@ -43,6 +43,11 @@ extern "C"
         uint32_t totalBufferComparisons; // how many write-read buffer, then compare the two have been done in the test;
         uint32_t totalBufferMiscompares; // how many times did the buffer miscompare.
     } patternTestResults, *ptrPatternTestResults;
+
+    // additional things to log during test:
+    // error LBA location
+    // device statistics, smart, phy counters (interface, defects, temperatures, )
+    // performance stuff? latency, MB/s, etc
 
     typedef struct s_cableTestResults
     {
@@ -68,7 +73,7 @@ extern "C"
     {
         CABLE_TEST_MODE_BUFFER_CMDS,
         CABLE_TEST_MODE_READ_WRITE_CMDS
-    }eCableTestMode;
+    } eCableTestMode;
 
     //-----------------------------------------------------------------------------
     //
@@ -87,7 +92,22 @@ extern "C"
     //-----------------------------------------------------------------------------
     M_NONNULL_PARAM_LIST(1, 2)
     M_PARAM_RO(1)
-    M_PARAM_WO(2) eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults testResults, eCableTestMode testMode);
+    M_PARAM_WO(2) eReturnValues perform_Cable_Test(const tDevice* device, ptrCableTestResults testResults);
+
+    typedef struct s_fuaCmd
+    {
+        bool writeFUA;
+        bool readFUA;
+    } fuaCmd;
+
+    M_NONNULL_PARAM_LIST(1, 2)
+    M_PARAM_RO(1)
+    M_PARAM_WO(2)
+    eReturnValues perform_Write_Read_Compare_Test(const tDevice*      device,
+                                                  ptrCableTestResults testResults,
+                                                  uint64_t            startingLBA,
+                                                  uint64_t            range,
+                                                  fuaCmd              fua);
 
     //-----------------------------------------------------------------------------
     //
