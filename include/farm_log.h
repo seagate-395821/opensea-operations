@@ -51,7 +51,7 @@ extern "C"
     M_NULL_TERM_STRING(2)
     M_PARAM_RO(2)
 
-    OPENSEA_OPERATIONS_API eReturnValues pull_FARM_Combined_Log(const tDevice*                 device,
+    OPENSEA_OPERATIONS_API eReturnValues pull_FARM_Combined_Log(const tDevice*           device,
                                                                 const char*              filePath,
                                                                 uint32_t                 transferSizeBytes,
                                                                 int                      sataFarmCopyType,
@@ -364,7 +364,7 @@ extern "C"
         uint64_t totalFlashLEDEventsActuator1;                  // on SAS in by actuator param 51h or 61h
         uint64_t lastFLEDIndexActuator1; // FLED array wraps so this points to most recent entry // on SAS in by
                                          // actuator param 51h or 61h
-        uint64_t last8FLEDEventsActuator1[FARM_FLED_EVENTS]; // on SAS in by actuator param 51h or 61h
+        uint64_t last8FLEDEventsActuator1[FARM_FLED_EVENTS];               // on SAS in by actuator param 51h or 61h
         uint64_t last8ReadWriteRetryEventsActuator1[FARM_RW_RETRY_EVENTS]; // on SAS in by actuator param 51h or 61h
         uint64_t reserved3[FARM_RESERVED3_CNT];
         uint64_t timestampOfLast8FLEDsActuator1[FARM_FLED_EVENTS];  // on SAS in by actuator param 51h or 61h

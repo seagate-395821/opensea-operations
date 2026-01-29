@@ -1103,10 +1103,10 @@ static eReturnValues poll_DST_Progress(const tDevice* device, dstTiming timing, 
 }
 
 eReturnValues run_DST(const tDevice* device,
-                      eDSTType DSTType,
-                      bool     pollForProgress,
-                      bool     captiveForeground,
-                      bool     ignoreMaxTime)
+                      eDSTType       DSTType,
+                      bool           pollForProgress,
+                      bool           captiveForeground,
+                      bool           ignoreMaxTime)
 {
     eReturnValues ret = NOT_SUPPORTED;
     if (is_Self_Test_Supported(device))
@@ -1396,13 +1396,13 @@ bool get_Error_LBA_From_DST_Log(const tDevice* device, uint64_t* lba)
     return isValidLBA;
 }
 
-static eReturnValues repair_LBA_And_Log_Result(const tDevice*  device,
-                                               bool      passthroughWrite,
-                                               bool      autoWriteReassign,
-                                               bool      autoReadReassign,
-                                               errorLBA* errorList,
-                                               uint64_t* errorIndex,
-                                               uint64_t* totalErrors)
+static eReturnValues repair_LBA_And_Log_Result(const tDevice* device,
+                                               bool           passthroughWrite,
+                                               bool           autoWriteReassign,
+                                               bool           autoReadReassign,
+                                               errorLBA*      errorList,
+                                               uint64_t*      errorIndex,
+                                               uint64_t*      totalErrors)
 {
     eReturnValues ret = SUCCESS;
     if (device->deviceVerbosity > VERBOSITY_QUIET)
@@ -1424,15 +1424,15 @@ static M_INLINE uint64_t half_read_around_range(uint64_t range)
     return range / UINT64_C(2);
 }
 
-static eReturnValues read_Around_Defect(const tDevice*  device,
-                                        bool      passthroughWrite,
-                                        uint64_t  readAroundRange,
-                                        errorLBA* errorList,
-                                        uint64_t* errorIndex,
-                                        uint64_t* totalErrors,
-                                        bool      autoReadReassign,
-                                        bool      autoWriteReassign,
-                                        uint16_t  errorLimit)
+static eReturnValues read_Around_Defect(const tDevice* device,
+                                        bool           passthroughWrite,
+                                        uint64_t       readAroundRange,
+                                        errorLBA*      errorList,
+                                        uint64_t*      errorIndex,
+                                        uint64_t*      totalErrors,
+                                        bool           autoReadReassign,
+                                        bool           autoWriteReassign,
+                                        uint16_t       errorLimit)
 {
     eReturnValues ret             = SUCCESS;
     uint64_t      readAroundStart = UINT64_C(0);
@@ -1510,7 +1510,7 @@ static eReturnValues read_Around_Defect(const tDevice*  device,
     return ret;
 }
 
-eReturnValues run_DST_And_Clean(const tDevice*                device,
+eReturnValues run_DST_And_Clean(const tDevice*          device,
                                 uint16_t                errorLimit,
                                 custom_Update           updateFunction,
                                 void*                   updateData,

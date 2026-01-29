@@ -1732,12 +1732,14 @@ void show_Power_Telemetry_Data(ptrSeagatePwrTelemetry pwrTelData)
         if (pwrTelData->totalMeasurementTimeRequested == 0)
         {
             print_str("\tMeasurement Time (seconds): 600\t (No previous request. Free-running mode)\n");
-            printf("\tDrive Timestamp When The Log Was Retrieved (seconds): %.6f\n", C_CAST(double, pwrTelData->driveTimeStampWhenTheLogWasRetrieved) / 1000000.0);
+            printf("\tDrive Timestamp When The Log Was Retrieved (seconds): %.6f\n",
+                   C_CAST(double, pwrTelData->driveTimeStampWhenTheLogWasRetrieved) / 1000000.0);
         }
         else
         {
             printf("\tMeasurement Time (seconds): %" PRIu16 "\n", pwrTelData->totalMeasurementTimeRequested);
-            printf("\tDrive Timestamp For Host Requested Measurement (seconds): %.6f\n", C_CAST(double, pwrTelData->driveTimeStampForHostRequestedMeasurement) / 1000000.0);
+            printf("\tDrive Timestamp For Host Requested Measurement (seconds): %.6f\n",
+                   C_CAST(double, pwrTelData->driveTimeStampForHostRequestedMeasurement) / 1000000.0);
         }
         printf("\tMeasurement Window (ms): %" PRIu16 "\n", pwrTelData->measurementWindowTimeMilliseconds);
 

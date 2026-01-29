@@ -823,7 +823,7 @@ eReturnValues get_Supported_Erase_Methods(const tDevice* device,
     bool                      formatUnitAdded                    = false;
     bool                      nvmFormatAdded                     = false;
     bool isWriteSameSupported  = is_Write_Same_Supported(device, 0, C_CAST(uint32_t, device->drive_info.deviceMaxLba),
-                                                        &maxNumberOfLogicalBlocksPerCommand);
+                                                         &maxNumberOfLogicalBlocksPerCommand);
     bool isFormatUnitSupported = is_Format_Unit_Supported(device, M_NULLPTR);
     eraseMethod* currentErase  = C_CAST(eraseMethod*, eraseMethodList);
     if (currentErase == M_NULLPTR)

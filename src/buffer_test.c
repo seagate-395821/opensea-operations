@@ -624,10 +624,9 @@ static void perform_Walking_Test(const tDevice*        device,
         start_Timer(&patternTimer);
         for (uint32_t bitNumber = UINT32_C(0), byteNumber = UINT32_C(0); byteNumber < bytemax; ++bitNumber)
         {
-            //TODO: Change deviceBufferSize to bytemax being passed in since we memcpy this which may slightly improve
-            //performance.
-            if (!fill_walking_test_pattern_in_buffer(patternBuffer, bytemax, walkingZeros, &bitNumber,
-                                                     &byteNumber) ||
+            // TODO: Change deviceBufferSize to bytemax being passed in since we memcpy this which may slightly improve
+            // performance.
+            if (!fill_walking_test_pattern_in_buffer(patternBuffer, bytemax, walkingZeros, &bitNumber, &byteNumber) ||
                 byteNumber >= bytemax)
             {
                 break; // finished all bits in the buffer

@@ -754,11 +754,11 @@ static M_INLINE void print_Depop_Start(uint64_t depopTime, const char* operation
 M_NONNULL_PARAM_LIST(1)
 M_NULL_TERM_STRING(3)
 M_PARAM_RO(3)
-static eReturnValues determine_Depop_Failure_Reason(const tDevice*      device,
-                                                    eReturnValues ret,
-                                                    const char*   operation,
-                                                    uint32_t      elementDescriptorID,
-                                                    uint64_t      requestedMaxLBA)
+static eReturnValues determine_Depop_Failure_Reason(const tDevice* device,
+                                                    eReturnValues  ret,
+                                                    const char*    operation,
+                                                    uint32_t       elementDescriptorID,
+                                                    uint64_t       requestedMaxLBA)
 {
     bool invalidElement             = false;
     bool invalidMaxLBA              = false;
@@ -860,11 +860,11 @@ static eReturnValues determine_Depop_Failure_Reason(const tDevice*      device,
 M_NONNULL_PARAM_LIST(1)
 M_NULL_TERM_STRING(3)
 M_PARAM_RO(3)
-static eReturnValues check_Depop_Command_Result_SCSI(const tDevice*      device,
-                                                     eReturnValues ret,
-                                                     const char*   operation,
-                                                     uint32_t      elementDescriptorID,
-                                                     uint64_t      requestedMaxLBA)
+static eReturnValues check_Depop_Command_Result_SCSI(const tDevice* device,
+                                                     eReturnValues  ret,
+                                                     const char*    operation,
+                                                     uint32_t       elementDescriptorID,
+                                                     uint64_t       requestedMaxLBA)
 {
     // On SAS, we'll have sense data, on ATA we can attempt to request sense, but some systems/controllers
     // do this for us and make this impossible to retrieve...so we need to work around this
@@ -896,11 +896,11 @@ static eReturnValues check_Depop_Command_Result_SCSI(const tDevice*      device,
 M_NONNULL_PARAM_LIST(1, 3)
 M_NULL_TERM_STRING(3)
 M_PARAM_RO(3)
-static eReturnValues check_Depop_Command_Result_ATA(const tDevice*      device,
-                                                    eReturnValues ret,
-                                                    const char*   operation,
-                                                    uint32_t      elementDescriptorID,
-                                                    uint64_t      requestedMaxLBA)
+static eReturnValues check_Depop_Command_Result_ATA(const tDevice* device,
+                                                    eReturnValues  ret,
+                                                    const char*    operation,
+                                                    uint32_t       elementDescriptorID,
+                                                    uint64_t       requestedMaxLBA)
 {
     bool    workaroundIncompleteSense = false;
     uint8_t senseKey                  = UINT8_C(0);
@@ -973,7 +973,8 @@ static eReturnValues check_Depop_Command_Result_ATA(const tDevice*      device,
 }
 
 M_NONNULL_PARAM_LIST(1, 2)
-M_NULL_TERM_STRING(2) M_PARAM_RO(2) static eReturnValues poll_Depop_Progress(const tDevice* device, const char* operation)
+M_NULL_TERM_STRING(2)
+M_PARAM_RO(2) static eReturnValues poll_Depop_Progress(const tDevice* device, const char* operation)
 {
     eReturnValues ret = SUCCESS;
     // SCSI and ATA will be handled differently.

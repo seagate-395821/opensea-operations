@@ -7057,238 +7057,238 @@ static eReturnValues get_SCSI_Report_Op_Codes_Data(const tDevice*              d
     eReturnValues ret = SUCCESS;
     DISABLE_NONNULL_COMPARE
     if (device != M_NULLPTR && driveInfo != M_NULLPTR && scsiInfo != M_NULLPTR)
-    RESTORE_NONNULL_COMPARE
-    {
-        // mostly for USB devices to prevent sending commands that don't usually
-        // work in the first place.
-        if (!device->drive_info.passThroughHacks.scsiHacks.noReportSupportedOperations)
+        RESTORE_NONNULL_COMPARE
         {
+            // mostly for USB devices to prevent sending commands that don't usually
+            // work in the first place.
+            if (!device->drive_info.passThroughHacks.scsiHacks.noReportSupportedOperations)
             {
-                // Most SAT devices won't report all at once, so try asking for individual commands that are supported
-                // one at a time instead of asking for everything all at once.
-                // Format unit
-                bool                         fastFormatSupported = false;
-                scsiOperationCodeInfoRequest supportedOpRequest;
-                safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
-                            sizeof(scsiOperationCodeInfoRequest));
-                supportedOpRequest.operationCode      = SCSI_FORMAT_UNIT_CMD;
-                supportedOpRequest.serviceActionValid = false;
-                eSCSICmdSupport formatSupported       = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                if (formatSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
                 {
-                    if (!(supportedOpRequest.cdbUsageData[3] == 0xFF &&
-                          supportedOpRequest.cdbUsageData[4] ==
-                              0xFF)) // if both these bytes are FFh, then the drive conforms to
-                                     // SCSI2 where this was the "interleave" field
+                    // Most SAT devices won't report all at once, so try asking for individual commands that are
+                    // supported one at a time instead of asking for everything all at once. Format unit
+                    bool                         fastFormatSupported = false;
+                    scsiOperationCodeInfoRequest supportedOpRequest;
+                    safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
+                                sizeof(scsiOperationCodeInfoRequest));
+                    supportedOpRequest.operationCode      = SCSI_FORMAT_UNIT_CMD;
+                    supportedOpRequest.serviceActionValid = false;
+                    eSCSICmdSupport formatSupported = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    if (formatSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
                     {
-                        if (supportedOpRequest.cdbUsageData[4] &
-                            0x03) // checks that fast format bits are available for use.
+                        if (!(supportedOpRequest.cdbUsageData[3] == 0xFF &&
+                              supportedOpRequest.cdbUsageData[4] ==
+                                  0xFF)) // if both these bytes are FFh, then the drive conforms to
+                                         // SCSI2 where this was the "interleave" field
                         {
-                            fastFormatSupported = true;
+                            if (supportedOpRequest.cdbUsageData[4] &
+                                0x03) // checks that fast format bits are available for use.
+                            {
+                                fastFormatSupported = true;
+                            }
                         }
                     }
-                }
-                else if (formatSupported == SCSI_CMD_SUPPORT_UNKNOWN) // both reporting methods failed
-                {
-                    // failed to check command support (for one reason or another)
-                    // for CMD DT, just return not supported.
-                    // for report op codes, set hacks flag and return
-                    if (scsiInfo->version >= 5)
+                    else if (formatSupported == SCSI_CMD_SUPPORT_UNKNOWN) // both reporting methods failed
                     {
-                        M_CONST_CAST(tDevice*, device)
-                            ->drive_info.passThroughHacks.scsiHacks.noReportSupportedOperations = true;
+                        // failed to check command support (for one reason or another)
+                        // for CMD DT, just return not supported.
+                        // for report op codes, set hacks flag and return
+                        if (scsiInfo->version >= 5)
+                        {
+                            M_CONST_CAST(tDevice*, device)
+                                ->drive_info.passThroughHacks.scsiHacks.noReportSupportedOperations = true;
+                        }
+                        return NOT_SUPPORTED;
                     }
-                    return NOT_SUPPORTED;
-                }
-                if (is_Format_Corrupt(device->drive_info.lastCommandSenseData, SPC3_SENSE_LEN))
-                {
-                    if (!driveInfo->isFormatCorrupt)
+                    if (is_Format_Corrupt(device->drive_info.lastCommandSenseData, SPC3_SENSE_LEN))
                     {
-                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
-                                                      &driveInfo->numberOfFeaturesSupported,
-                                                      "Format Corrupt - not all features identifiable.");
+                        if (!driveInfo->isFormatCorrupt)
+                        {
+                            add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                          &driveInfo->numberOfFeaturesSupported,
+                                                          "Format Corrupt - not all features identifiable.");
+                        }
                     }
-                }
-                if (formatSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    add_Feature_To_Supported_List(driveInfo->featuresSupported, &driveInfo->numberOfFeaturesSupported,
-                                                  "Format Unit");
-                }
-                if (fastFormatSupported)
-                {
-                    add_Feature_To_Supported_List(driveInfo->featuresSupported, &driveInfo->numberOfFeaturesSupported,
-                                                  "Fast Format");
-                }
-
-                safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
-                            sizeof(scsiOperationCodeInfoRequest));
-                supportedOpRequest.operationCode      = SCSI_FORMAT_WITH_PRESET_CMD;
-                supportedOpRequest.serviceActionValid = false;
-                eSCSICmdSupport formatPresetSupported = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                if (formatPresetSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    add_Feature_To_Supported_List(driveInfo->featuresSupported, &driveInfo->numberOfFeaturesSupported,
-                                                  "Format With Preset");
-                }
-
-                safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
-                            sizeof(scsiOperationCodeInfoRequest));
-                supportedOpRequest.operationCode      = SANITIZE_CMD;
-                supportedOpRequest.serviceActionValid = true;
-                supportedOpRequest.serviceAction      = SCSI_SANITIZE_OVERWRITE;
-                eSCSICmdSupport sanitizeOverwriteSupported =
-                    is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                supportedOpRequest.serviceAction        = SCSI_SANITIZE_BLOCK_ERASE;
-                eSCSICmdSupport sanitizeBlockSupported  = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                supportedOpRequest.serviceAction        = SCSI_SANITIZE_CRYPTOGRAPHIC_ERASE;
-                eSCSICmdSupport sanitizeCryptoSupported = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                if (sanitizeOverwriteSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD ||
-                    sanitizeBlockSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD ||
-                    sanitizeCryptoSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    add_Sanitize_Feature_To_Drive_Info( driveInfo->featuresSupported,
-                                                     &driveInfo->numberOfFeaturesSupported,
-                                                     sanitizeOverwriteSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD,
-                                                     sanitizeBlockSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD,
-                                                     sanitizeCryptoSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD,
-                                                     false,
-                                                     false);
-                }
-
-                safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
-                            sizeof(scsiOperationCodeInfoRequest));
-                supportedOpRequest.operationCode      = 0x9E;
-                supportedOpRequest.serviceActionValid = true;
-                supportedOpRequest.serviceAction      = 0x17;
-                eSCSICmdSupport getElementStatusSupported =
-                    is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                supportedOpRequest.serviceAction = 0x18;
-                eSCSICmdSupport removeAndTruncateSupported =
-                    is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                supportedOpRequest.serviceAction = 0x19;
-                eSCSICmdSupport restoreElementsSupported =
-                    is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                eSCSICmdSupport removeAndModifySupported = SCSI_CMD_SUPPORT_NOT_SUPPORTED;
-                if (scsiInfo->peripheralDeviceType == PERIPHERAL_HOST_MANAGED_ZONED_BLOCK_DEVICE)
-                {
-                    supportedOpRequest.serviceAction = 0x20;
-                    restoreElementsSupported         = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                }
-                // storage element depopulation
-                if (removeAndTruncateSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD &&
-                    getElementStatusSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    if (restoreElementsSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    if (formatSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
                     {
                         add_Feature_To_Supported_List(driveInfo->featuresSupported,
-                                                      &driveInfo->numberOfFeaturesSupported,
-                                                      "Storage Element Depopulation + Restore");
+                                                      &driveInfo->numberOfFeaturesSupported, "Format Unit");
                     }
-                    else
+                    if (fastFormatSupported)
                     {
                         add_Feature_To_Supported_List(driveInfo->featuresSupported,
-                                                      &driveInfo->numberOfFeaturesSupported,
-                                                      "Storage Element Depopulation");
+                                                      &driveInfo->numberOfFeaturesSupported, "Fast Format");
                     }
-                }
-                // Add checking that this is zbd first?
-                if (removeAndModifySupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    add_Feature_To_Supported_List(driveInfo->featuresSupported, &driveInfo->numberOfFeaturesSupported,
-                                                  "Remove Element and Modify Zones");
-                }
-                if (scsiInfo->zoneDomainsOrRealms &&
-                    scsiInfo->peripheralDeviceType == PERIPHERAL_HOST_MANAGED_ZONED_BLOCK_DEVICE)
-                {
+
                     safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
                                 sizeof(scsiOperationCodeInfoRequest));
-                    supportedOpRequest.operationCode      = 0x95;
-                    supportedOpRequest.serviceActionValid = true;
-                    supportedOpRequest.serviceAction      = 0x07;
-                    eSCSICmdSupport zoneDomainsSupported =
-                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                    if (zoneDomainsSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                    {
-                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
-                                                      &driveInfo->numberOfFeaturesSupported, "Zone Domains");
-                    }
-                    supportedOpRequest.serviceAction    = 0x06;
-                    eSCSICmdSupport zoneRealmsSupported = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                    if (zoneRealmsSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                    {
-                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
-                                                      &driveInfo->numberOfFeaturesSupported, "Zone Realms");
-                    }
-                }
-
-                if (!driveInfo->securityInfo.securityProtocolInfoValid)
-                {
-                    // Check security protocol in case the earlier attempt did not work to detect when the OS/driver/HBA
-                    // are blocking these commands
-                    safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
-                                sizeof(scsiOperationCodeInfoRequest));
-                    supportedOpRequest.operationCode      = 0xA2;
+                    supportedOpRequest.operationCode      = SCSI_FORMAT_WITH_PRESET_CMD;
                     supportedOpRequest.serviceActionValid = false;
-                    eSCSICmdSupport secProtSupported = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                    // If this command is being reported by the device as supported according to the standard, but it
-                    // failed to read the list of supported protocols earlier, then it is being blocked. Any other value
-                    // tells us it is not supported by the device (more or less)
-                    if (secProtSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    eSCSICmdSupport formatPresetSupported =
+                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    if (formatPresetSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
                     {
-                        driveInfo->trustedCommandsBeingBlocked = true;
+                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                      &driveInfo->numberOfFeaturesSupported, "Format With Preset");
                     }
-                }
 
-                // check write buffer (firmware download) call info firmware download.h for this information.
-                supportedDLModes supportedDLModes;
-                safe_memset(&supportedDLModes, sizeof(supportedDLModes), 0, sizeof(supportedDLModes));
-                supportedDLModes.size    = sizeof(supportedDLModes);
-                supportedDLModes.version = SUPPORTED_FWDL_MODES_VERSION;
-                // change the device type to scsi before we enter here! Doing this so that --satinfo is correct!
-                const eDriveType tempDevType                          = device->drive_info.drive_type;
-                M_CONST_CAST(tDevice*, device)->drive_info.drive_type = SCSI_DRIVE;
-                if (SUCCESS == get_Supported_FWDL_Modes(device, &supportedDLModes))
-                {
-                    driveInfo->fwdlSupport.downloadSupported  = supportedDLModes.downloadMicrocodeSupported;
-                    driveInfo->fwdlSupport.segmentedSupported = supportedDLModes.segmented;
-                    driveInfo->fwdlSupport.deferredSupported  = supportedDLModes.deferred;
-                    driveInfo->fwdlSupport.dmaModeSupported   = supportedDLModes.firmwareDownloadDMACommandSupported;
-                    driveInfo->fwdlSupport.seagateDeferredPowerCycleRequired =
-                        supportedDLModes.seagateDeferredPowerCycleActivate;
-                }
-                M_CONST_CAST(tDevice*, device)->drive_info.drive_type = tempDevType;
-                // ATA Passthrough commands
-                safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
-                            sizeof(scsiOperationCodeInfoRequest));
-                supportedOpRequest.operationCode      = ATA_PASS_THROUGH_12;
-                supportedOpRequest.serviceActionValid = false;
-                eSCSICmdSupport ataPT12               = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                if (ataPT12 == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    // TODO: make sure this isn't the "blank" command being supported by a MMC device.
-                    //       do this by checking the cmdsupport bits in the CDB
-                    add_Feature_To_Supported_List(driveInfo->featuresSupported, &driveInfo->numberOfFeaturesSupported,
-                                                  "ATA Pass-Through 12");
-                }
-                supportedOpRequest.operationCode = ATA_PASS_THROUGH_16;
-                eSCSICmdSupport ataPT16          = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                if (ataPT16 == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    add_Feature_To_Supported_List(driveInfo->featuresSupported, &driveInfo->numberOfFeaturesSupported,
-                                                  "ATA Pass-Through 16");
-                }
-                supportedOpRequest.operationCode      = 0x7F;
-                supportedOpRequest.serviceActionValid = true;
-                supportedOpRequest.serviceAction      = 0x1FF0;
-                eSCSICmdSupport ataPT32               = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
-                if (ataPT32 == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
-                {
-                    add_Feature_To_Supported_List(driveInfo->featuresSupported, &driveInfo->numberOfFeaturesSupported,
-                                                  "ATA Pass-Through 32");
+                    safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
+                                sizeof(scsiOperationCodeInfoRequest));
+                    supportedOpRequest.operationCode      = SANITIZE_CMD;
+                    supportedOpRequest.serviceActionValid = true;
+                    supportedOpRequest.serviceAction      = SCSI_SANITIZE_OVERWRITE;
+                    eSCSICmdSupport sanitizeOverwriteSupported =
+                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    supportedOpRequest.serviceAction = SCSI_SANITIZE_BLOCK_ERASE;
+                    eSCSICmdSupport sanitizeBlockSupported =
+                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    supportedOpRequest.serviceAction = SCSI_SANITIZE_CRYPTOGRAPHIC_ERASE;
+                    eSCSICmdSupport sanitizeCryptoSupported =
+                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    if (sanitizeOverwriteSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD ||
+                        sanitizeBlockSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD ||
+                        sanitizeCryptoSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    {
+                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                      &driveInfo->numberOfFeaturesSupported, "Sanitize");
+                    }
+
+                    safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
+                                sizeof(scsiOperationCodeInfoRequest));
+                    supportedOpRequest.operationCode      = 0x9E;
+                    supportedOpRequest.serviceActionValid = true;
+                    supportedOpRequest.serviceAction      = 0x17;
+                    eSCSICmdSupport getElementStatusSupported =
+                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    supportedOpRequest.serviceAction = 0x18;
+                    eSCSICmdSupport removeAndTruncateSupported =
+                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    supportedOpRequest.serviceAction = 0x19;
+                    eSCSICmdSupport restoreElementsSupported =
+                        is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    eSCSICmdSupport removeAndModifySupported = SCSI_CMD_SUPPORT_NOT_SUPPORTED;
+                    if (scsiInfo->peripheralDeviceType == PERIPHERAL_HOST_MANAGED_ZONED_BLOCK_DEVICE)
+                    {
+                        supportedOpRequest.serviceAction = 0x20;
+                        restoreElementsSupported = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    }
+                    // storage element depopulation
+                    if (removeAndTruncateSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD &&
+                        getElementStatusSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    {
+                        if (restoreElementsSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                        {
+                            add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                          &driveInfo->numberOfFeaturesSupported,
+                                                          "Storage Element Depopulation + Restore");
+                        }
+                        else
+                        {
+                            add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                          &driveInfo->numberOfFeaturesSupported,
+                                                          "Storage Element Depopulation");
+                        }
+                    }
+                    // Add checking that this is zbd first?
+                    if (removeAndModifySupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    {
+                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                      &driveInfo->numberOfFeaturesSupported,
+                                                      "Remove Element and Modify Zones");
+                    }
+                    if (scsiInfo->zoneDomainsOrRealms &&
+                        scsiInfo->peripheralDeviceType == PERIPHERAL_HOST_MANAGED_ZONED_BLOCK_DEVICE)
+                    {
+                        safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
+                                    sizeof(scsiOperationCodeInfoRequest));
+                        supportedOpRequest.operationCode      = 0x95;
+                        supportedOpRequest.serviceActionValid = true;
+                        supportedOpRequest.serviceAction      = 0x07;
+                        eSCSICmdSupport zoneDomainsSupported =
+                            is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                        if (zoneDomainsSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                        {
+                            add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                          &driveInfo->numberOfFeaturesSupported, "Zone Domains");
+                        }
+                        supportedOpRequest.serviceAction = 0x06;
+                        eSCSICmdSupport zoneRealmsSupported =
+                            is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                        if (zoneRealmsSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                        {
+                            add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                          &driveInfo->numberOfFeaturesSupported, "Zone Realms");
+                        }
+                    }
+
+                    if (!driveInfo->securityInfo.securityProtocolInfoValid)
+                    {
+                        // Check security protocol in case the earlier attempt did not work to detect when the
+                        // OS/driver/HBA are blocking these commands
+                        safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
+                                    sizeof(scsiOperationCodeInfoRequest));
+                        supportedOpRequest.operationCode      = 0xA2;
+                        supportedOpRequest.serviceActionValid = false;
+                        eSCSICmdSupport secProtSupported =
+                            is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                        // If this command is being reported by the device as supported according to the standard, but
+                        // it failed to read the list of supported protocols earlier, then it is being blocked. Any
+                        // other value tells us it is not supported by the device (more or less)
+                        if (secProtSupported == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                        {
+                            driveInfo->trustedCommandsBeingBlocked = true;
+                        }
+                    }
+
+                    // check write buffer (firmware download) call info firmware download.h for this information.
+                    supportedDLModes supportedDLModes;
+                    safe_memset(&supportedDLModes, sizeof(supportedDLModes), 0, sizeof(supportedDLModes));
+                    supportedDLModes.size    = sizeof(supportedDLModes);
+                    supportedDLModes.version = SUPPORTED_FWDL_MODES_VERSION;
+                    // change the device type to scsi before we enter here! Doing this so that --satinfo is correct!
+                    const eDriveType tempDevType                          = device->drive_info.drive_type;
+                    M_CONST_CAST(tDevice*, device)->drive_info.drive_type = SCSI_DRIVE;
+                    if (SUCCESS == get_Supported_FWDL_Modes(device, &supportedDLModes))
+                    {
+                        driveInfo->fwdlSupport.downloadSupported  = supportedDLModes.downloadMicrocodeSupported;
+                        driveInfo->fwdlSupport.segmentedSupported = supportedDLModes.segmented;
+                        driveInfo->fwdlSupport.deferredSupported  = supportedDLModes.deferred;
+                        driveInfo->fwdlSupport.dmaModeSupported = supportedDLModes.firmwareDownloadDMACommandSupported;
+                        driveInfo->fwdlSupport.seagateDeferredPowerCycleRequired =
+                            supportedDLModes.seagateDeferredPowerCycleActivate;
+                    }
+                    M_CONST_CAST(tDevice*, device)->drive_info.drive_type = tempDevType;
+                    // ATA Passthrough commands
+                    safe_memset(&supportedOpRequest, sizeof(scsiOperationCodeInfoRequest), 0,
+                                sizeof(scsiOperationCodeInfoRequest));
+                    supportedOpRequest.operationCode      = ATA_PASS_THROUGH_12;
+                    supportedOpRequest.serviceActionValid = false;
+                    eSCSICmdSupport ataPT12 = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    if (ataPT12 == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    {
+                        // TODO: make sure this isn't the "blank" command being supported by a MMC device.
+                        //       do this by checking the cmdsupport bits in the CDB
+                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                      &driveInfo->numberOfFeaturesSupported, "ATA Pass-Through 12");
+                    }
+                    supportedOpRequest.operationCode = ATA_PASS_THROUGH_16;
+                    eSCSICmdSupport ataPT16          = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    if (ataPT16 == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    {
+                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                      &driveInfo->numberOfFeaturesSupported, "ATA Pass-Through 16");
+                    }
+                    supportedOpRequest.operationCode      = 0x7F;
+                    supportedOpRequest.serviceActionValid = true;
+                    supportedOpRequest.serviceAction      = 0x1FF0;
+                    eSCSICmdSupport ataPT32 = is_SCSI_Operation_Code_Supported(device, &supportedOpRequest);
+                    if (ataPT32 == SCSI_CMD_SUPPORT_SUPPORTED_TO_SCSI_STANDARD)
+                    {
+                        add_Feature_To_Supported_List(driveInfo->featuresSupported,
+                                                      &driveInfo->numberOfFeaturesSupported, "ATA Pass-Through 32");
+                    }
                 }
             }
         }
-    }
     return ret;
 }
 

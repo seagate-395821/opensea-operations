@@ -1205,7 +1205,7 @@ static bool did_host_reset_occur(const tDevice* device, bool satATASecuritySuppo
     return hostResetDuringErase;
 }
 
-static void clear_Password_After_Erase_Failure(const tDevice*            device,
+static void clear_Password_After_Erase_Failure(const tDevice*      device,
                                                ataSecurityStatus   securityStatus,
                                                ataSecurityStatus   finalSecurityStatus,
                                                ataSecurityPassword ataPassword,
@@ -1263,7 +1263,7 @@ static void clear_Password_After_Erase_Failure(const tDevice*            device,
     }
 }
 
-static eReturnValues ata_Security_Erase_Final_Results(const tDevice*          device,
+static eReturnValues ata_Security_Erase_Final_Results(const tDevice*    device,
                                                       eReturnValues     ataEraseResult,
                                                       ataSecurityStatus finalSecurityStatus,
                                                       seatimer_t        ataSecureEraseTimer)
@@ -1313,7 +1313,7 @@ static eReturnValues ata_Security_Erase_Final_Results(const tDevice*          de
     return result;
 }
 
-eReturnValues run_ATA_Security_Erase(const tDevice*              device,
+eReturnValues run_ATA_Security_Erase(const tDevice*        device,
                                      eATASecurityEraseType eraseType,
                                      ataSecurityPassword   ataPassword,
                                      bool                  forceSATvalid,

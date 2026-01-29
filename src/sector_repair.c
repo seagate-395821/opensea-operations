@@ -418,11 +418,11 @@ eReturnValues reallocate_LBAs(const tDevice* device, ptrErrorLBA lbaList, uint32
     return ret;
 }
 
-eReturnValues repair_LBA(const tDevice*    device,
-                         ptrErrorLBA LBA,
-                         bool        forcePassthroughCommand,
-                         bool        automaticWriteReallocationEnabled,
-                         bool        automaticReadReallocationEnabled)
+eReturnValues repair_LBA(const tDevice* device,
+                         ptrErrorLBA    LBA,
+                         bool           forcePassthroughCommand,
+                         bool           automaticWriteReallocationEnabled,
+                         bool           automaticReadReallocationEnabled)
 {
     eReturnValues ret = UNKNOWN;
     uint16_t      logicalPerPhysical =

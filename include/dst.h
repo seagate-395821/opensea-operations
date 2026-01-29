@@ -56,19 +56,18 @@ extern "C"
     OPENSEA_OPERATIONS_API eReturnValues
     run_DST(const tDevice* device, eDSTType DSTType, bool pollForProgress, bool captiveForeground, bool ignoreMaxTime);
 
-    //! \fn eReturnValues send_DST(const tDevice* device, eDSTType DSTType, bool captiveForeground, uint32_t commandTimeout)
-    //! \brief Sends a Device Self Test (DST) command to the specified device.
-    //! \param[in] device Pointer to the device structure representing the device to send the DST command to.
-    //! \param[in] DSTType The type of DST to send (short, long, conveyance).
-    //! \param[in] captiveForeground Set to true to run the DST in captive/foreground mode, waiting for completion.
-    //! \param[in] commandTimeout The timeout for the command in milliseconds.
-    //! \return eReturnValues indicating the success or failure of the operation.
+    //! \fn eReturnValues send_DST(const tDevice* device, eDSTType DSTType, bool captiveForeground, uint32_t
+    //! commandTimeout) \brief Sends a Device Self Test (DST) command to the specified device. \param[in] device Pointer
+    //! to the device structure representing the device to send the DST command to. \param[in] DSTType The type of DST
+    //! to send (short, long, conveyance). \param[in] captiveForeground Set to true to run the DST in captive/foreground
+    //! mode, waiting for completion. \param[in] commandTimeout The timeout for the command in milliseconds. \return
+    //! eReturnValues indicating the success or failure of the operation.
     M_NONNULL_PARAM_LIST(1)
     M_PARAM_RO(1)
     OPENSEA_OPERATIONS_API eReturnValues send_DST(const tDevice* device,
-                                                  eDSTType DSTType,
-                                                  bool     captiveForeground,
-                                                  uint32_t commandTimeout);
+                                                  eDSTType       DSTType,
+                                                  bool           captiveForeground,
+                                                  uint32_t       commandTimeout);
 
     //! \fn eReturnValues abort_DST(const tDevice* device)
     //! \brief Sends a Device Self Test (DST) abort command to the specified device.
@@ -88,14 +87,17 @@ extern "C"
     M_PARAM_RO(1)
     M_PARAM_WO(2)
     M_PARAM_WO(3)
-    OPENSEA_OPERATIONS_API eReturnValues get_DST_Progress(const tDevice* device, uint32_t* percentComplete, uint8_t* status);
+    OPENSEA_OPERATIONS_API eReturnValues get_DST_Progress(const tDevice* device,
+                                                          uint32_t*      percentComplete,
+                                                          uint8_t*       status);
 
     //! \fn eReturnValues print_DST_Progress(const tDevice* device)
     //! \brief Prints the progress of an active Device Self Test (DST) to the screen in human-readable format.
     //! This will translated the percentage and status according to the device's standard for easy interpretation.
     //! \param[in] device Pointer to the device structure representing the device to print the DST progress for.
     //! \return eReturnValues indicating the success or failure of the operation.
-    M_NONNULL_PARAM_LIST(1) M_PARAM_RO(1) OPENSEA_OPERATIONS_API eReturnValues print_DST_Progress(const tDevice* device);
+    M_NONNULL_PARAM_LIST(1)
+    M_PARAM_RO(1) OPENSEA_OPERATIONS_API eReturnValues print_DST_Progress(const tDevice* device);
 
 //! \def MAX_DST_STATUS_STRING_LENGTH
 //! \brief The maximum length of the string used to translate the DST status.
@@ -176,9 +178,9 @@ extern "C"
     M_PARAM_RO(1)
     M_PARAM_WO(2)
     M_PARAM_WO(3)
-    OPENSEA_OPERATIONS_API eReturnValues nvme_Get_DST_Progress(const tDevice*  device,
-                                                               uint32_t* percentComplete,
-                                                               uint8_t*  status);
+    OPENSEA_OPERATIONS_API eReturnValues nvme_Get_DST_Progress(const tDevice* device,
+                                                               uint32_t*      percentComplete,
+                                                               uint8_t*       status);
 
     //! \fn eReturnValues scsi_Abort_DST(const tDevice* device)
     //! \brief Sends a SCSI Device Self Test (DST) abort command to the specified device.
@@ -478,7 +480,8 @@ extern "C"
     //! support.
     //! \return true if the device supports selective self-test functionality, false otherwise.
     //! \note Only ATA devices have a selective self-test, SCSI and NVMe do not support this.
-    M_NONNULL_PARAM_LIST(1) M_PARAM_RO(1) OPENSEA_OPERATIONS_API bool is_Selective_Self_Test_Supported(const tDevice* device);
+    M_NONNULL_PARAM_LIST(1)
+    M_PARAM_RO(1) OPENSEA_OPERATIONS_API bool is_Selective_Self_Test_Supported(const tDevice* device);
 
     //! \fn eReturnValues run_SMART_Offline(const tDevice* device)
     //! \brief Runs a SMART Offline Data Collection on the specified device.

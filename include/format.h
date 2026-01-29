@@ -371,8 +371,8 @@ extern "C"
     //! \returns 1
     M_DEPRECATED_REASON("No longer needed for allocating supportedFormats structure correctly. This is a fixed size "
                         "for up to 64 sector sizes now.")
-    M_NONNULL_PARAM_LIST(1) M_PARAM_RO(1) OPENSEA_OPERATIONS_API uint32_t
-        get_Number_Of_Supported_Sector_Sizes(const tDevice* device);
+    M_NONNULL_PARAM_LIST(1)
+    M_PARAM_RO(1) OPENSEA_OPERATIONS_API uint32_t get_Number_Of_Supported_Sector_Sizes(const tDevice* device);
 
     //-----------------------------------------------------------------------------
     //
